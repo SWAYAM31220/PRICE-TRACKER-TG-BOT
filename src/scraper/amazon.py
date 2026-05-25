@@ -1,6 +1,7 @@
 import re
 import logging
 import asyncio
+import aiohttp
 from typing import Optional, Dict, Any
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 
@@ -42,7 +43,23 @@ class AmazonScraper(BaseScraper):
                 return match.group(1)
         return None
 
+    @staticmethod
+    async def resolve_shortened_url(url: str) -> str:
+        if "amzn.in" not in url and "amzn.to" not in url:
+            return url
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.head(url, allow_redirects=True, timeout=10) as response:
+                    return str(response.url)
+        except Exception as e:
+            logger.error(f"Failed to resolve shortened URL {url}: {e}")
+            return url
+
     async def scrape_product(self, url: str) -> Optional[Dict[str, Any]]:
+        # Resolve shortened URL first
+        url = await self.resolve_shortened_url(url)
+        
         browser = await AmazonScraper.get_browser()
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
