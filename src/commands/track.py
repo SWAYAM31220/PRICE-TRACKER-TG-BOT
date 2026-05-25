@@ -28,6 +28,11 @@ async def cmd_track(message: types.Message, command: CommandObject):
         await message.answer("Invalid target price. Please provide a number.")
         return
 
+    # Resolve shortened URL before ASIN extraction
+    status_msg = await message.answer("🔍 Processing link...")
+    url = await scraper.resolve_shortened_url(url)
+    await status_msg.delete()
+
     asin = scraper.extract_asin(url)
     if not asin:
         await message.answer("Could not extract ASIN from the URL. Please provide a valid Amazon India product link.")
