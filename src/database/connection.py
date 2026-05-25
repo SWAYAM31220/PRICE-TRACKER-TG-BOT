@@ -1,5 +1,6 @@
 import asyncpg
 import logging
+import os
 from typing import Optional
 from src.config.settings import settings
 
@@ -12,6 +13,16 @@ class DatabaseManager:
     async def get_pool(cls) -> asyncpg.Pool:
         if cls._pool is None:
             try:
+                # Explicitly unset PGPORT and other PG environment variables 
+                # that might contain user-pasted passwords or incorrect values
+                for env_var in ["PGPORT", "PGHOST", "PGUSER", "PGPASSWORD", "PGDATABASE"]:
+                    if env_var in os.environ:
+                        val = os.environ[env_var]
+                        # If the value is not numeric for a port, or looks like a password
+                        if env_var == "PGPORT" and not val.isdigit():
+                            logger.warning(f"Unsetting invalid {env_var}='{val}'")
+                            os.environ.pop(env_var)
+
                 # Some platforms provide postgres:// but asyncpg prefers postgresql://
                 dsn = settings.DATABASE_URL
                 if dsn.startswith("postgres://"):
