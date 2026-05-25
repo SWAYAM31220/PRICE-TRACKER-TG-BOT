@@ -12,15 +12,33 @@ class DatabaseManager:
     async def get_pool(cls) -> asyncpg.Pool:
         if cls._pool is None:
             try:
+                # Some platforms provide postgres:// but asyncpg prefers postgresql://
+                dsn = settings.DATABASE_URL
+                if dsn.startswith("postgres://"):
+                    dsn = dsn.replace("postgres://", "postgresql://", 1)
+                
+                # Remove query parameters that might cause "bad query field" errors
+                # Supabase/Render strings sometimes include unsupported params for asyncpg
+                if "?" in dsn:
+                    base_dsn, query = dsn.split("?", 1)
+                    # Keep only known safe params if needed, or just use base_dsn
+                    # For now, let's try the base_dsn if it has unsupported fields
+                    # but usually sslmode is what people want. 
+                    # asyncpg uses 'ssl' instead of 'sslmode'
+                    dsn = base_dsn
+
                 cls._pool = await asyncpg.create_pool(
-                    settings.DATABASE_URL,
+                    dsn,
                     min_size=5,
                     max_size=20,
-                    command_timeout=60
+                    command_timeout=60,
+                    ssl='require' if "supabase" in dsn or "render" in dsn else None
                 )
                 logger.info("Database connection pool created.")
             except Exception as e:
-                logger.error(f"Failed to create database pool: {e}")
+                # Log a redacted version of the URL for debugging
+                redacted_url = settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "URL hidden"
+                logger.error(f"Failed to create database pool for host: {redacted_url}. Error: {e}")
                 raise
         return cls._pool
 
