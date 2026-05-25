@@ -34,7 +34,13 @@ async def start_web_server():
     runner = web.AppRunner(app)
     await runner.setup()
     
-    port = int(os.environ.get("PORT", 10000))
+    port_env = os.environ.get("PORT", "10000")
+    try:
+        port = int(port_env)
+    except ValueError:
+        logger.warning(f"Invalid PORT environment variable '{port_env}'. Defaulting to 10000.")
+        port = 10000
+    
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     logger.info(f"Web server started on port {port}")
@@ -42,19 +48,27 @@ async def start_web_server():
 async def on_startup():
     logger.info("Starting up...")
     
-    # Initialize Database
-    await init_db()
+    # 1. Start web server IMMEDIATELY for Render health checks
+    # This must happen first so Render detects the port is open
+    await start_web_server()
     
-    # Setup Bot Handlers
+    # 2. Initialize Database
+    try:
+        await init_db()
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        # We continue so the web server stays up and we can see logs
+    
+    # 3. Setup Bot Handlers
     setup_handlers()
     
-    # Start Scheduler
-    scheduler = setup_scheduler()
-    scheduler.start()
-    logger.info("Scheduler started.")
-    
-    # Start web server for Render health checks and keep-alive pings
-    asyncio.create_task(start_web_server())
+    # 4. Start Scheduler
+    try:
+        scheduler = setup_scheduler()
+        scheduler.start()
+        logger.info("Scheduler started.")
+    except Exception as e:
+        logger.error(f"Scheduler failed to start: {e}")
 
 async def on_shutdown():
     logger.info("Shutting down...")
@@ -65,6 +79,11 @@ async def on_shutdown():
 async def main():
     try:
         await on_startup()
+        
+        # Verify bot token before polling
+        bot_info = await bot.get_me()
+        logger.info(f"Bot authorized: @{bot_info.username}")
+        
         logger.info("Bot is polling...")
         await dp.start_polling(bot)
     except Exception as e:
