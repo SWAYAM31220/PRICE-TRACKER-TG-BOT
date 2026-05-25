@@ -1,0 +1,17 @@
+services:
+  - type: worker
+    name: price-tracker-bot
+    env: python
+    buildCommand: pip install -r requirements.txt && playwright install --with-deps chromium
+    startCommand: python -m src.main
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SCRAPE_INTERVAL_HOURS
+        value: "6"
+      - key: CACHE_EXPIRY_HOURS
+        value: "6"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
