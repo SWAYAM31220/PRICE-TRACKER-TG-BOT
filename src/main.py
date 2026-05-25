@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import sys
+import os
+from aiohttp import web
 from src.bot.init import dp, bot, setup_handlers
 from src.database.init_db import init_db
 from src.database.connection import DatabaseManager
@@ -18,6 +20,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+async def handle_ping(request):
+    return web.Response(text="pong")
+
+async def handle_root(request):
+    return web.Response(text="Bot is running!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_root)
+    app.router.add_get("/ping", handle_ping)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"Web server started on port {port}")
+
 async def on_startup():
     logger.info("Starting up...")
     
@@ -31,6 +52,9 @@ async def on_startup():
     scheduler = setup_scheduler()
     scheduler.start()
     logger.info("Scheduler started.")
+    
+    # Start web server for Render health checks and keep-alive pings
+    asyncio.create_task(start_web_server())
 
 async def on_shutdown():
     logger.info("Shutting down...")
