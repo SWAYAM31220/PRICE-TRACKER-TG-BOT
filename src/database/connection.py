@@ -42,6 +42,7 @@ class DatabaseManager:
                     dsn,
                     min_size=5,
                     max_size=20,
+                    statement_cache_size=0,
                     command_timeout=60,
                     ssl='require' if "supabase" in dsn or "render" in dsn else None
                 )
