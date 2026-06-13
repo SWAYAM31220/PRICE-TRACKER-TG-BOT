@@ -1,0 +1,10 @@
+python-telegram-bot==20.7
+beautifulsoup4
+lxml
+supabase
+apscheduler
+openai
+fastapi
+uvicorn
+python-dotenv
+fake-useragent
