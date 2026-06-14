@@ -1,7 +1,11 @@
-python-telegram-bot==20.7
+python-telegram-bot==21.10
 beautifulsoup4
 lxml
-supabase
+
+supabase==2.31.0
+httpx==0.28.1
+websockets==15.0.1
+
 apscheduler
 openai
 fastapi
