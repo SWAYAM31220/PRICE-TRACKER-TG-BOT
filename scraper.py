@@ -33,6 +33,23 @@ def _random_headers() -> dict:
     }
 
 
+PRICEHISTORY_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-IN,en-GB;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://pricehistory.app/",
+    "Origin": "https://pricehistory.app",
+    "Connection": "keep-alive",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Ch-Ua": '"Chromium";v="125", "Not.A/Brand";v="24"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+}
+
+
 # ── URL Resolver ──────────────────────────────────────────
 
 async def resolve_url(url: str) -> str:
@@ -159,7 +176,7 @@ def _extract_from_meta(desc: str, pattern: str) -> float | None:
 
 async def scrape_camel(asin: str) -> dict:
     """
-    1. PriceHistory.app — POST /api/search (reverse engineered)
+    1. PriceHistory.app — POST /api/search with browser headers
     2. DB price_history fallback
     """
 
@@ -167,31 +184,35 @@ async def scrape_camel(asin: str) -> dict:
     try:
         amazon_url = f"https://www.amazon.in/dp/{asin}"
 
-        async with httpx.AsyncClient(follow_redirects=True, timeout=20) as client:
-            # Get slug via undocumented API
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=20,
+            headers=PRICEHISTORY_HEADERS,
+        ) as client:
+            # Warm up session with a homepage visit to get cookies
+            await client.get("https://pricehistory.app/")
+
+            # Hit the undocumented search API
             resp = await client.post(
                 "https://pricehistory.app/api/search",
                 json={"url": amazon_url},
-                headers={"User-Agent": "Mozilla/5.0"},
             )
             resp.raise_for_status()
             data = resp.json()
 
             if not data.get("status"):
-                raise Exception(f"Product not found on PriceHistory.app")
+                raise Exception("Product not found on PriceHistory.app")
 
             slug = data["code"]
             logger.info(f"PriceHistory.app slug for {asin}: {slug}")
 
-            # Fetch product page
+            # Fetch the product page
             product_url = f"https://pricehistory.app/p/{slug}"
-            resp = await client.get(product_url, headers={"User-Agent": "Mozilla/5.0"})
+            resp = await client.get(product_url)
             resp.raise_for_status()
 
-        # Parse meta description for prices
         soup = BeautifulSoup(resp.text, "html.parser")
         meta = soup.find("meta", {"name": "description"})
-
         if not meta:
             raise Exception("Meta description not found")
 
